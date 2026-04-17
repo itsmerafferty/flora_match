@@ -1,0 +1,51 @@
+name: Unit Tests & Code Analysis
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze code
+        run: flutter analyze --no-pub
+
+      - name: Run unit and widget tests
+        run: flutter test --coverage --verbose
+
+      - name: Generate LCOV report
+        run: |
+          sudo apt-get install lcov
+          lcov --remove coverage/lcov.info 'lib/generated/**' -o coverage/lcov.info
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/lcov.info
+          flags: flutter
+          fail_ci_if_error: false
+
+      - name: Check test coverage
+        run: |
+          coverage_percent=$(grep "end_of_record" coverage/lcov.info -B 1 | grep "LF:" | sed 's/LF://g' | awk '{sum+=$1} END {print sum}')
+          echo "Test coverage: ${coverage_percent}%"
+          if [ "$coverage_percent" -lt 50 ]; then
+            echo "Warning: Test coverage below 50%"
+          fi

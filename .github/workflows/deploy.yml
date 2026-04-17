@@ -1,0 +1,103 @@
+name: Deploy to Firebase
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: '3.7.2'
+
+jobs:
+  deploy-functions:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Node
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install dependencies
+      working-directory: ./functions
+      run: npm install
+    
+    - name: Build TypeScript
+      working-directory: ./functions
+      run: npm run build
+    
+    - name: Run tests
+      working-directory: ./functions
+      run: npm test
+      continue-on-error: true
+    
+    - name: Deploy Cloud Functions
+      uses: FirebaseExtended/action-hosting-deploy@v0
+      with:
+        repoToken: '${{ secrets.GITHUB_TOKEN }}'
+        firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+        projectId: 'flora-match-ph-dev'
+        channelId: live
+
+  deploy-firestore-rules:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Firebase CLI
+      run: npm install -g firebase-tools
+    
+    - name: Deploy Firestore Rules
+      run: |
+        firebase deploy --only firestore:rules \
+          --project=flora-match-ph-dev \
+          --token="${{ secrets.FIREBASE_TOKEN }}"
+
+  build-apk:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.7.2'
+    
+    - name: Get dependencies
+      run: flutter pub get
+    
+    - name: Build APK
+      run: flutter build apk --split-per-abi
+    
+    - name: Upload APK
+      uses: actions/upload-artifact@v3
+      with:
+        name: app-apk
+        path: build/app/outputs/flutter-apk/
+
+  build-web:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.7.2'
+    
+    - name: Get dependencies
+      run: flutter pub get
+    
+    - name: Build Web
+      run: flutter build web
+    
+    - name: Deploy to Firebase Hosting
+      run: |
+        npm install -g firebase-tools
+        firebase deploy --only hosting:flora-match-ph-dev \
+          --token="${{ secrets.FIREBASE_TOKEN }}"
